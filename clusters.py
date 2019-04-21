@@ -1,6 +1,8 @@
 from PIL import Image,ImageDraw
 from math import *
 import random
+from pytagcloud import create_tag_image, make_tags
+import csv
 
 def readfile(file_name):
     f = open(file_name)
@@ -250,7 +252,7 @@ def kcluster(rows,distance=euclidean,k=4):
     clusters=[[random.random()*(ranges[i][1]-ranges[i][0])+ranges[i][0]
     for i in range(len(rows[0]))] for j in range(k)]
   
-    lastmatches=None
+    lastmatches = None
     bestmatches = None
 
     for t in range(100):
@@ -280,9 +282,103 @@ def kcluster(rows,distance=euclidean,k=4):
                 for j in range(len(avgs)):
                     avgs[j]/=len(bestmatches[i])
                 clusters[i]=avgs
-      
+    # Calculate SSE
+    sse = 0
+    for i in range(len(clusters)):
+        for j in bestmatches[i]:
+            sse += euclidean(clusters[i],rows[j])
+    sse /= len(rows)
+    print("SSE: "+ str(sse))
     return bestmatches
 
+def bisect(clust,distance,data):
+    rows=[]
+    for i in clust:
+        rows.append(data[i])
+    
+    # Determine the minimum and maximum values for each point
+    ranges=[(min([row[i] for row in rows]),max([row[i] for row in rows]))
+            for i in range(len(rows[0]))]
+            
+    # Create 2 randomly placed centroids
+    clusters=[[random.random()*(ranges[i][1]-ranges[i][0])+ranges[i][0]
+    for i in range(len(rows[0]))] for j in range(2)]
+        
+    lastmatches = None
+    bestmatches = None
+        
+    for t in range(100):
+        print ('Iteration %d' % t)
+        bestmatches=[[] for i in range(2)]
+            
+        # Find which centroid is the closest for each row
+        for j in range(len(rows)):
+            row=rows[j]
+            bestmatch=0
+            for i in range(2):
+                d=distance(clusters[i],row)
+                if d<distance(clusters[bestmatch],row): bestmatch=i
+            bestmatches[bestmatch].append(j)
+        
+        # If the results are the same as last time, this is complete
+        if bestmatches==lastmatches: break
+        lastmatches=bestmatches
+            
+        # Move the centroids to the average of their members
+        for i in range(2):
+            avgs=[0.0]*len(rows[0])
+            if len(bestmatches[i])>0:
+                for rowid in bestmatches[i]:
+                    for m in range(len(rows[rowid])):
+                        avgs[m]+=rows[rowid][m]
+                for j in range(len(avgs)):
+                    avgs[j]/=len(bestmatches[i])
+                clusters[i]=avgs
+
+    # Calculate SSE of a individual cluster
+    sse = [0,0]
+    for i in range(2):
+        for j in bestmatches[i]:
+            sse[i] += euclidean(clusters[i],rows[j])
+
+    bestmatches_data=[[],[]]
+    for i in range(2):
+        for j in bestmatches[i]:
+            bestmatches_data[i].append(clust[j])
+
+    return bestmatches_data,sse
+
+def bisectkcluster(rows,distance,k):
+    #cluster[0] = array of cluster
+    #cluster[1] = sse of a cluster
+    first_clust = []
+    for i in range(len(rows)):
+        first_clust.append(i)
+    cluster = bisect(first_clust,distance,rows)
+    num_cluster = 2
+    while (num_cluster != k):
+        for i in range(num_cluster):
+            if (i == 0):
+                largest_sse = cluster[1][0]
+                index = 0
+            else:
+                if (cluster[1][i] > largest_sse):
+                    index = i
+        new_cluster = bisect(cluster[0][index],distance,rows)
+    
+        cluster[0][index] = new_cluster[0][0]
+        cluster[1][index] = new_cluster[1][0]
+        cluster[0].append(new_cluster[0][1])
+        cluster[1].append(new_cluster[1][1])
+        num_cluster += 1
+        
+    #print sse
+    avg_sse = 0
+    for i in cluster[1]:
+        avg_sse+=i
+    avg_sse/=len(rows)
+    print("SSE: "+str(avg_sse))
+    return cluster[0]
 
 def scaledown(data,distance=pearson,rate=0.01):
     n=len(data)
@@ -342,4 +438,102 @@ def draw2d(data,labels,jpeg='mds2d.jpg'):
         y=(data[i][1]+0.5)*1000
         draw.text((x,y),labels[i],(0,0,0))
     img.save(jpeg,'JPEG')
+
+def create_cloud(oname, words, maxsize=60, fontname='Lobster'):
+    tags = make_tags(words, maxsize=maxsize)
+    create_tag_image(tags, oname, size=(2000, 2000), fontname=fontname)
+
+
+def descriptive_label(rows, clusters):
+    words = []
+    first = True
+    with open('dimensions_keywords.csv') as csv_file:
+        file = csv.reader(csv_file, delimiter=',', quotechar='"')
+        for i in file:
+            if first:
+                first = False
+                continue
+            list(i)
+            words.append(i[1].split())
+            words.append(i[2].split())
+
+    count = 0
+    for cluster in clusters:
+        count += 1
+        keywords_value = [0,0,0,0,0,0]
+        word_value = []
+        for i in cluster:
+            for j in range(6):
+                keywords_value[j] += rows[i][j]
+        for i in range(6):
+            keywords_value[i] = int(keywords_value[i] / len(cluster))
+            for w in words[2*i]:
+                word_value.append((w, keywords_value[i]))
+            for w in words[2*i+1]:
+                word_value.append((w, 100 - keywords_value[i]))
+        create_cloud("(using bisect)Cluster_" + str(count) + ".png", word_value)
+
+def convert(first_line, name, i):
+    line = ""
+    if not first_line:
+        line += ', '
+    if name == "Arab countries":
+        countries = ["Bahrain", "Comoros", "Djibouti", "Kuwait", "Lebanon", "Libya", "Mauritania", "Oman", "Palestine", "Qatar", "Somalia", "Sudan", "Syria", "Tunisia", "United Arab Emirates", "Yemen"]
+        for country in countries[:-1]:
+            line += '{"Country": "' + country + '", "Cluster": ' + str(i) + '}, '
+        line += '{"Country": "' + countries[-1] + '", "Cluster": ' + str(i) + '}'
+    elif name == "Africa West":
+        countries = ["Benin", "Cabo Verde", "Ivory Coast", "Gambia", "Guinea", "Guinea-Bissau", "Liberia", "Niger", "Senegal", "Sierra Leone", "Togo"]
+        for country in countries[:-1]:
+            line += '{"Country": "' + country + '", "Cluster": ' + str(i) + '}, '
+        line += '{"Country": "' + countries[-1] + '", "Cluster": ' + str(i) + '}'
+    elif name == "Africa East":
+        countries = ["Eritrea", "Ethiopia", "South Sudan", "Madagascar", "Mauritius", "Seychelles", "Reunion", "Mayotte", "Burundi", "Kenya", "Malawi", "Mozambique"]
+        for country in countries[:-1]:
+            line += '{"Country": "' + country + '", "Cluster": ' + str(i) + '}, '
+        line += '{"Country": "' + countries[-1] + '", "Cluster": ' + str(i) + '}'
+    elif name == "Slovak Rep":
+        line += '{"Country": "' + "Slovakia" + '", "Cluster": ' + str(i) + '}'
+    elif name == "Czech Rep":
+        line += '{"Country": "' + "Czech Republic" + '", "Cluster": ' + str(i) + '}'
+    elif name == "Dominican Rep":
+        line += '{"Country": "' + "Dominican Republic" + '", "Cluster": ' + str(i) + '}'
+    elif name == "Kyrgyz Rep":
+        line += '{"Country": "' + "Kyrgyzstan" + '", "Cluster": ' + str(i) + '}'
+    elif name == "Macedonia Rep":
+        line += '{"Country": "' + "Macedonia" + '", "Cluster": ' + str(i) + '}'
+    elif name == "U.S.A.":
+        line += '{"Country": "' + "United States" + '", "Cluster": ' + str(i) + '}'
+    elif name == "Korea South":
+        line += '{"Country": "' + "South Korea" + '", "Cluster": ' + str(i) + '}'
+    else:
+        line += '{"Country": "' + name + '", "Cluster": ' + str(i) + '}'
+    return line
+
+def to_json(file_name):
+    first = True
+    file = open('./public_html/data.js', 'w', newline='')
+    file.write("var data1 = [")
+    with open(file_name+".csv", encoding="utf-8") as csvfile:
+        readCSV = csv.reader((line.replace('\0','') for line in csvfile), delimiter=',')
+        i = 0
+        for row in readCSV:
+            cluster = list(row)
+            for name in cluster:
+                if first:
+                    file.write(convert(first, name, i))
+                    first = False
+                else:
+                    file.write(convert(first, name, i))
+            i += 1
+    file.write('];')
+    file.close()
+    csvfile.close()
+
+def clust_to_csv(cluster,type):
+    with open('cluster_'+str(type)+'.csv','w') as writeFile:
+        writer = csv.writer(writeFile)
+        for i in range(len(cluster)):
+            writer.writerow(cluster[i])
+    writeFile.close()
 

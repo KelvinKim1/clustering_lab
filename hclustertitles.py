@@ -1,6 +1,6 @@
 import clusters
 
-docs,words,data=clusters.readfile('titles_vectors.txt')
+docs,words,data=clusters.readfile('dataset_vectors.txt')
 
 clust=clusters.hcluster(data,distance=clusters.pearson)
 print ('clusters by pearson correlation')
