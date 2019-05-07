@@ -1,3 +1,3 @@
 import clusters
 
-clusters.to_json('cluster_pearson') #enter name of the csv file
+clusters.to_json('bisect') #enter name of the csv file

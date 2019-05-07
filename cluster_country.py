@@ -2,7 +2,7 @@ import clusters
 
 docs,words,data=clusters.readfile('dataset_vectors.txt')
 
-num_clusters=5
+num_clusters=6
 print('Searching for {} clusters:'.format(num_clusters))
 print()
 clust=clusters.kcluster(data,distance=clusters.pearson,k=num_clusters)
@@ -58,6 +58,7 @@ for i in range(num_clusters):
     print (list)
 clusters.clust_to_csv(cluster,'bisect')
 
+'''
 clusters.descriptive_label(data,clust)
 
 clust=clusters.hcluster(data,distance=clusters.pearson)
@@ -80,3 +81,4 @@ print ('clusters by euclidean distance')
 clusters.printhclust(clust,labels=docs)
 clusters.drawdendrogram(clust,docs,jpeg='docsclust_cosine.jpg')
 
+'''

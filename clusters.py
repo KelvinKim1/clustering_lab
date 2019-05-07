@@ -531,7 +531,7 @@ def to_json(file_name):
     csvfile.close()
 
 def clust_to_csv(cluster,type):
-    with open('cluster_'+str(type)+'.csv','w') as writeFile:
+    with open(str(type)+'.csv','w') as writeFile:
         writer = csv.writer(writeFile)
         for i in range(len(cluster)):
             writer.writerow(cluster[i])
