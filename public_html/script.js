@@ -19,8 +19,8 @@ google.charts.load('current', {
         };
 
         var options = {colorAxis: {
-          colors: ['red', 'orange', 'yellow', 'green'],
-          values: [0, 1, 2, 3]
+          colors: ['red', 'orange', 'yellow', 'green','blue','purple','indigo','brown'],
+          values: [0, 1, 2, 3, 4, 5,6,7]
         }};
 
         var chart = new google.visualization.GeoChart(document.getElementById('regions_div'));
